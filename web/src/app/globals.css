@@ -1,26 +1,126 @@
-@import "tailwindcss";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* ── VIP Portal Design Tokens ── */
+  --font-sans: var(--font-barlow), system-ui, sans-serif;
+  --font-mono: 'Geist Mono', monospace;
+
+  /* Color palette: zinc-950 base, charcoal surface, cyan neon accent, off-white text, zinc mid */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-neon: var(--neon);
+  --color-surface: var(--surface);
+  --color-destructive: var(--destructive);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ── Always dark — force the VIP dark mode ── */
+:root {
+  color-scheme: dark;
+
+  /* 1. Background: zinc-950 (#09090b) */
+  --background: oklch(0.10 0.002 285);
+  /* 2. Surface: deep charcoal (#111113) */
+  --surface: oklch(0.13 0.003 285);
+  /* 3. Foreground: bright off-white */
+  --foreground: oklch(0.96 0.004 285);
+  /* 4. Neon cyan accent */
+  --neon: oklch(0.82 0.18 196);
+
+  /* ── Semantic tokens derived from the 4-color palette ── */
+  --card: oklch(0.15 0.004 285);
+  --card-foreground: oklch(0.96 0.004 285);
+  --popover: oklch(0.15 0.004 285);
+  --popover-foreground: oklch(0.96 0.004 285);
+
+  /* Primary = neon cyan */
+  --primary: oklch(0.82 0.18 196);
+  --primary-foreground: oklch(0.10 0.002 285);
+
+  /* Secondary = charcoal surface */
+  --secondary: oklch(0.20 0.005 285);
+  --secondary-foreground: oklch(0.96 0.004 285);
+
+  /* Muted = zinc mid-tone */
+  --muted: oklch(0.22 0.004 285);
+  --muted-foreground: oklch(0.55 0.005 285);
+
+  /* Accent = subtle neon wash */
+  --accent: oklch(0.18 0.015 196);
+  --accent-foreground: oklch(0.82 0.18 196);
+
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 10%);
+  --ring: oklch(0.82 0.18 196 / 60%);
+
+  --destructive: oklch(0.65 0.22 27);
+  --radius: 0.5rem;
+}
+
+/* Keyframes for the neon glow pulse on the logo */
+@keyframes neon-pulse {
+
+  0%,
+  100% {
+    text-shadow: 0 0 8px var(--neon), 0 0 20px var(--neon), 0 0 40px var(--neon);
+    opacity: 1;
+  }
+
+  50% {
+    text-shadow: 0 0 4px var(--neon), 0 0 10px var(--neon), 0 0 20px var(--neon);
+    opacity: 0.85;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+.neon-glow {
+  color: var(--neon);
+  animation: neon-pulse 3s ease-in-out infinite;
+}
+
+.neon-border {
+  border-color: oklch(0.82 0.18 196 / 35%);
+  box-shadow: 0 0 0 1px oklch(0.82 0.18 196 / 15%), inset 0 1px 0 oklch(1 0 0 / 5%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
 }
