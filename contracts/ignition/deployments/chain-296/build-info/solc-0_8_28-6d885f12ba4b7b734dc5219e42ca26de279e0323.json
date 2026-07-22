@@ -1,0 +1,49 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-6d885f12ba4b7b734dc5219e42ca26de279e0323",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "compilerType": "solc",
+  "toolVersions": {
+    "hardhat": "3.11.0"
+  },
+  "userSourceNameMap": {
+    "contracts/RoyaltySplitter.sol": "project/contracts/RoyaltySplitter.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode.linkReferences",
+            "evm.bytecode.object",
+            "evm.bytecode.opcodes",
+            "evm.bytecode.sourceMap",
+            "evm.deployedBytecode.immutableReferences",
+            "evm.deployedBytecode.linkReferences",
+            "evm.deployedBytecode.object",
+            "evm.deployedBytecode.opcodes",
+            "evm.deployedBytecode.sourceMap",
+            "evm.methodIdentifiers"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/RoyaltySplitter.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.28;\n\n/**\n * @title IHederaTokenService\n * @notice Minimal interface for the Hedera Token Service (HTS) system precompile at 0x167.\n */\ninterface IHederaTokenService {\n    /**\n     * @dev Transfers tokens where the calling contract has authorization or holds treasury balance.\n     * @param token The EVM address of the HTS token (0x0000000000000000000000000000000000XXXXXX)\n     * @param sender The address sending the token\n     * @param receiver The address receiving the token\n     * @param amount The number of tokens to transfer\n     * @return responseCode Hedera response code (22 = SUCCESS)\n     */\n    function transferToken(\n        address token,\n        address sender,\n        address receiver,\n        int64 amount\n    ) external returns (int64 responseCode);\n}\n\n/**\n * @title RoyaltySplitter\n * @notice Handles automated revenue distribution for ticket sales and natively \n * triggers HTS VIP token transfers via the Hedera 0x167 precompile.\n */\ncontract RoyaltySplitter {\n    // Hedera Token Service system precompile address\n    address constant HTS_PRECOMPILE = address(0x167);\n    int64 constant HEDERA_SUCCESS = 22;\n    uint256 constant BASIS_POINTS_DENOMINATOR = 10000; // 100.00%\n\n    address public owner;\n    address public treasuryAccount;\n    address public htsTokenAddress;\n    uint256 public ticketPriceHbar;\n\n    struct Payee {\n        address account;\n        uint256 shareBps; // Share in basis points (e.g., 7000 = 70%)\n    }\n\n    Payee[] public payees;\n\n    event TicketPurchased(address indexed buyer, uint256 amountPaid, address indexed tokenAddress);\n    event RoyaltyDistributed(address indexed payee, uint256 amount);\n    event PayeesUpdated(uint256 totalPayees);\n\n    modifier onlyOwner() {\n        require(msg.sender == owner, \"RoyaltySplitter: Caller is not owner\");\n        _;\n    }\n\n    /**\n     * @param _payees Array of recipient wallet addresses\n     * @param _sharesBps Array of corresponding shares in basis points (must sum to 10,000)\n     * @param _treasuryAccount Address holding the HTS token supply\n     * @param _htsTokenAddress EVM address format of the HTS token ID\n     * @param _ticketPriceHbar Ticket price in Wei/Tinybar equivalent\n     */\n    constructor(\n        address[] memory _payees,\n        uint256[] memory _sharesBps,\n        address _treasuryAccount,\n        address _htsTokenAddress,\n        uint256 _ticketPriceHbar\n    ) {\n        require(_payees.length == _sharesBps.length, \"RoyaltySplitter: Mismatched input lengths\");\n        require(_treasuryAccount != address(0), \"RoyaltySplitter: Invalid treasury\");\n\n        owner = msg.sender;\n        treasuryAccount = _treasuryAccount;\n        htsTokenAddress = _htsTokenAddress;\n        ticketPriceHbar = _ticketPriceHbar;\n\n        _setPayees(_payees, _sharesBps);\n    }\n\n    /**\n     * @notice Primary entry point to purchase a VIP Ticket using HBAR.\n     * Splits funds across payees and transfers 1 HTS token from treasury to recipient.\n     * @param recipient The EVM address receiving the HTS token\n     */\n    function purchaseTicket(address recipient) external payable {\n        require(msg.value >= ticketPriceHbar, \"RoyaltySplitter: Insufficient HBAR sent\");\n        require(recipient != address(0), \"RoyaltySplitter: Invalid recipient\");\n\n        // 1. Distribute funds to payees according to basis points\n        uint256 totalDistributed = 0;\n        for (uint256 i = 0; i < payees.length; i++) {\n            uint256 payeeAmount = (msg.value * payees[i].shareBps) / BASIS_POINTS_DENOMINATOR;\n            if (payeeAmount > 0) {\n                totalDistributed += payeeAmount;\n                (bool success, ) = payable(payees[i].account).call{value: payeeAmount}(\"\");\n                require(success, \"RoyaltySplitter: Failed to send HBAR to payee\");\n                emit RoyaltyDistributed(payees[i].account, payeeAmount);\n            }\n        }\n\n        // Refund any remaining dust balance to buyer\n        uint256 remainder = msg.value - totalDistributed;\n        if (remainder > 0) {\n            (bool refundSuccess, ) = payable(msg.sender).call{value: remainder}(\"\");\n            require(refundSuccess, \"RoyaltySplitter: Refund failed\");\n        }\n\n        // 2. Interact with Hedera 0x167 Precompile to transfer the HTS VIP token\n        int64 response = IHederaTokenService(HTS_PRECOMPILE).transferToken(\n            htsTokenAddress,\n            treasuryAccount,\n            recipient,\n            1\n        );\n\n        require(response == HEDERA_SUCCESS, \"RoyaltySplitter: HTS precompile transfer failed\");\n\n        emit TicketPurchased(recipient, msg.value, htsTokenAddress);\n    }\n\n    /**\n     * @notice Allows updating payout splits for future sales.\n     */\n    function setPayees(address[] memory _payees, uint256[] memory _sharesBps) external onlyOwner {\n        require(_payees.length == _sharesBps.length, \"RoyaltySplitter: Mismatched input lengths\");\n        delete payees;\n        _setPayees(_payees, _sharesBps);\n    }\n\n    function _setPayees(address[] memory _payees, uint256[] memory _sharesBps) internal {\n        uint256 totalBps = 0;\n        for (uint256 i = 0; i < _payees.length; i++) {\n            require(_payees[i] != address(0), \"RoyaltySplitter: Invalid payee address\");\n            payees.push(Payee({account: _payees[i], shareBps: _sharesBps[i]}));\n            totalBps += _sharesBps[i];\n        }\n        require(totalBps == BASIS_POINTS_DENOMINATOR, \"RoyaltySplitter: Shares must sum to 10000\");\n        emit PayeesUpdated(_payees.length);\n    }\n\n    /**\n     * @notice Update target HTS token address or treasury\n     */\n    function updateTokenConfiguration(address _htsTokenAddress, address _treasuryAccount, uint256 _ticketPriceHbar) external onlyOwner {\n        htsTokenAddress = _htsTokenAddress;\n        treasuryAccount = _treasuryAccount;\n        ticketPriceHbar = _ticketPriceHbar;\n    }\n\n    /**\n     * @notice Helper to check configured payees count\n     */\n    function getPayeesCount() external view returns (uint256) {\n        return payees.length;\n    }\n}"
+      }
+    }
+  }
+}
