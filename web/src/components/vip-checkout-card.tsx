@@ -131,13 +131,13 @@ export function VipCheckoutCard() {
             // that references 'auth.users', you MUST paste a real UUID from your database here for testing.
             const TEST_USER_ID = "2f0e1848-c02e-493d-b648-3a78ca4feaef"
 
-            const res = await fetch("/api/mpesa/stkpush", {
+            const res = await fetch("/api/webhooks/mpesa/stkpush", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     phoneNumber: formatKenyanPhone(phone),
                     userId: TEST_USER_ID,
-                    amount: 1000 // Ensure this matches the price you want to test
+                    amount: 1 // Ensure this matches the price you want to test
                 })
             })
 

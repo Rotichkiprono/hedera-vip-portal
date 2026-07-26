@@ -62,6 +62,8 @@ export async function POST(request: Request) {
 
         // 3. Get OAuth Token and Dispatch STK Push Request
         const accessToken = await getDarajaToken();
+        const callbackUrl = process.env.DARAJA_CALLBACK_URL!;
+        console.log("🔍 DEBUG CALLBACK URL:", callbackUrl);
 
         const stkPayload = {
             BusinessShortCode: shortcode,
@@ -90,6 +92,7 @@ export async function POST(request: Request) {
         );
 
         const stkData = await stkResponse.json();
+        console.log("🚨 DARAJA RAW RESPONSE:", stkData);
 
         if (stkData.ResponseCode !== '0') {
             return NextResponse.json(
