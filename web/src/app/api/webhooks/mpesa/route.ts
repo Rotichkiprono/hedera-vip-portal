@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
+import { readFileSync } from "fs";
+import path from "path";
 import { createClient } from "@supabase/supabase-js";
 import { ethers } from "ethers";
+
+export const runtime = "nodejs";
+
+const artifactPath = path.join(
+    process.cwd(),
+    "../contracts/ignition/deployments/chain-296/artifacts/RoyaltySplitterModule#RoyaltySplitter.json"
+);
+
+const artifact = JSON.parse(
+    readFileSync(artifactPath, "utf8")
+) as { abi: ethers.InterfaceAbi };
 
 // Initialize Supabase with the Service Role Key to bypass RLS
 const supabase = createClient(
@@ -50,7 +63,7 @@ export async function POST(request: Request) {
             .from("transactions")
             .update({
                 status: "FIAT_CLEARED",
-                mpesa_receipt_number: "TEST_RECEIPT_456", // Replace with actual receipt from callback
+                mpesa_receipt_number: "TEST_RECEIPT_15", // Replace with actual receipt from callback
             })
             .eq("checkout_request_id", CheckoutRequestID);
 
@@ -76,9 +89,16 @@ export async function POST(request: Request) {
             });
         }
 
-        const recipientEvmAddress = Array.isArray(txData.users)
-            ? txData.users[0]?.evm_address
-            : txData.users?.evm_address;
+        const txUsers = (txData as {
+            users?:
+                | { evm_address?: string | null }
+                | Array<{ evm_address?: string | null }>
+                | null;
+        }).users;
+
+        const recipientEvmAddress = Array.isArray(txUsers)
+            ? txUsers[0]?.evm_address
+            : txUsers?.evm_address;
 
         if (!recipientEvmAddress) {
             console.error("No EVM Address found.");
@@ -108,12 +128,9 @@ export async function POST(request: Request) {
             provider
         );
 
-        const splitterAddress =
-            process.env.NEXT_PUBLIC_ROYALTY_SPLITTER_ADDRESS!;
+        const splitterAddress = process.env.NEXT_PUBLIC_ROYALTY_SPLITTER_ADDRESS!;
 
-        const abi = [
-            "function purchaseTicket(address recipient) external payable",
-        ];
+        const abi = artifact.abi;
 
         const splitterContract = new ethers.Contract(
             splitterAddress,
@@ -126,6 +143,7 @@ export async function POST(request: Request) {
         // --------------------------------------------------
         try {
             const ticketPriceInWei = ethers.parseEther("10.0");
+            const recipientEvmAddress = wallet.address;
 
             const tx = await splitterContract.purchaseTicket(
                 recipientEvmAddress,
